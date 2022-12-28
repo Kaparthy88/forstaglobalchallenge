@@ -26,6 +26,7 @@ namespace QuizService.Services
         {
             const string sql = "SELECT * FROM Quiz;";
             var quizzes = _connection.Query<Quiz>(sql);
+           
             return quizzes.Select(quiz =>
                 new QuizResponseModel
                 {
@@ -136,5 +137,101 @@ namespace QuizService.Services
             return id;
         }
 
+        /// <summary>
+        /// Update QuizModel based on input parameters
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public int UpdateQuizModel(int id, QuizUpdateModel value)
+        {
+            const string sql = "UPDATE Quiz SET Title = @Title WHERE Id = @Id";
+            int rowsUpdated = _connection.Execute(sql, new { Id = id, Title = value.Title });
+            return rowsUpdated;
+        }
+
+        /// <summary>
+        /// Deleted the Quiz by QuizId
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        public int DeleteQuiz(int id)
+        {
+            const string sql = "DELETE FROM Quiz WHERE Id = @Id";
+            int rowsDeleted = _connection.Execute(sql, new { Id = id });
+            return rowsDeleted;
+        }
+
+        /// <summary>
+        /// Create new questions
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public int CreateNewQuestionsForQuiz(int id, QuestionCreateModel value)
+        {
+            const string sql = "INSERT INTO Question (Text, QuizId) VALUES(@Text, @QuizId); SELECT LAST_INSERT_ROWID();";
+            var questionId  = (int) _connection.ExecuteScalar(sql, new { Text = value.Text, QuizId = id });
+            return questionId;
+        }
+
+        /// <summary>
+        /// Updating the Question for Quiz
+        /// </summary>
+        /// <param name="qid"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public int UpdateQuestion(int qid, QuestionUpdateModel value)
+        {
+            const string sql = "UPDATE Question SET Text = @Text, CorrectAnswerId = @CorrectAnswerId WHERE Id = @QuestionId";
+            int rowsUpdated = _connection.Execute(sql, new { QuestionId = qid, Text = value.Text, CorrectAnswerId = value.CorrectAnswerId });
+            return rowsUpdated;
+        }
+
+        /// <summary>
+        /// Delete Question
+        /// </summary>
+        /// <param name="qid"></param>
+        public void DeleteQuestionById(int qid)
+        {
+            const string sql = "DELETE FROM Question WHERE Id = @QuestionId";
+            _connection.ExecuteScalar(sql, new { QuestionId = qid });
+        }
+
+        /// <summary>
+        /// Create Anwer based on Input parameters
+        /// </summary>
+        /// <param name="qid"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public int CreateAnswer(int qid, AnswerCreateModel value)
+        {
+            const string sql = "INSERT INTO Answer (Text, QuestionId) VALUES(@Text, @QuestionId); SELECT LAST_INSERT_ROWID();";
+            var answerId = (int)_connection.ExecuteScalar(sql, new { Text = value.Text, QuestionId = qid });
+            return answerId;
+        }
+
+        /// <summary>
+        /// Update Answer
+        /// </summary>
+        /// <param name="qid"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public int UpdateAnswer(int qid, AnswerUpdateModel value)
+        {
+            const string sql = "UPDATE Answer SET Text = @Text WHERE Id = @AnswerId";
+            int rowsUpdated = _connection.Execute(sql, new { AnswerId = qid, Text = value.Text });
+            return rowsUpdated;
+        }
+
+        /// <summary>
+        /// Delete Answer
+        /// </summary>
+        /// <param name="aid"></param>
+        public void DeleteAnswer(int aid)
+        {
+            const string sql = "DELETE FROM Answer WHERE Id = @AnswerId";
+            _connection.ExecuteScalar(sql, new { AnswerId = aid });
+        }
     }
 }
