@@ -3,86 +3,63 @@ using System.Data;
 using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using QuizService.Model;
-using QuizService.Model.Domain;
-using System.Linq;
+using QuizService.Services;
+using Microsoft.Extensions.Logging;
+using QuizService.Exceptions;
 
 namespace QuizService.Controllers;
 
 [Route("api/quizzes")]
 public class QuizController : Controller
 {
+    //To Do: Move the connection property from QuizController to Query Service.
     private readonly IDbConnection _connection;
+    private readonly IQueryService _queryService;
+    private ILogger<QuizController> _logger;
 
-    public QuizController(IDbConnection connection)
+    public QuizController(IDbConnection connection,IQueryService queryService,ILogger<QuizController> logger)
     {
         _connection = connection;
+        _queryService = queryService;
+        _logger = logger;
     }
 
     // GET api/quizzes
     [HttpGet]
     public IEnumerable<QuizResponseModel> Get()
     {
-        const string sql = "SELECT * FROM Quiz;";
-        var quizzes = _connection.Query<Quiz>(sql);
-        return quizzes.Select(quiz =>
-            new QuizResponseModel
-            {
-                Id = quiz.Id,
-                Title = quiz.Title
-            });
+        return _queryService.FetchQuizInfo();
+
+        
     }
 
     // GET api/quizzes/5
     [HttpGet("{id}")]
     public object Get(int id)
     {
-        const string quizSql = "SELECT * FROM Quiz WHERE Id = @Id;";
-        var quiz = _connection.QuerySingle<Quiz>(quizSql, new {Id = id});
-        if (quiz == null)
-            return NotFound();
-        const string questionsSql = "SELECT * FROM Question WHERE QuizId = @QuizId;";
-        var questions = _connection.Query<Question>(questionsSql, new {QuizId = id});
-        const string answersSql = "SELECT a.Id, a.Text, a.QuestionId FROM Answer a INNER JOIN Question q ON a.QuestionId = q.Id WHERE q.QuizId = @QuizId;";
-        var answers = _connection.Query<Answer>(answersSql, new {QuizId = id})
-            .Aggregate(new Dictionary<int, IList<Answer>>(), (dict, answer) => {
-                if (!dict.ContainsKey(answer.QuestionId))
-                    dict.Add(answer.QuestionId, new List<Answer>());
-                dict[answer.QuestionId].Add(answer);
-                return dict;
-            });
-        return new QuizResponseModel
+        try
         {
-            Id = quiz.Id,
-            Title = quiz.Title,
-            Questions = questions.Select(question => new QuizResponseModel.QuestionItem
-            {
-                Id = question.Id,
-                Text = question.Text,
-                Answers = answers.ContainsKey(question.Id)
-                    ? answers[question.Id].Select(answer => new QuizResponseModel.AnswerItem
-                    {
-                        Id = answer.Id,
-                        Text = answer.Text
-                    })
-                    : new QuizResponseModel.AnswerItem[0],
-                CorrectAnswerId = question.CorrectAnswerId
-            }),
-            Links = new Dictionary<string, string>
-            {
-                {"self", $"/api/quizzes/{id}"},
-                {"questions", $"/api/quizzes/{id}/questions"}
-            }
-        };
+            _logger.LogInformation($"Fetching Quiz for specif Id : {id} ");
+            return _queryService.FetchQuizById(id);
+        }
+        catch (NotFoundException ex )
+        {
+            _logger.LogError("Getting error while fetching the Quiz by Id ",ex.Message);
+            return NotFound();
+        }
     }
+
+    
 
     // POST api/quizzes
     [HttpPost]
     public IActionResult Post([FromBody]QuizCreateModel value)
     {
-        var sql = $"INSERT INTO Quiz (Title) VALUES('{value.Title}'); SELECT LAST_INSERT_ROWID();";
-        var id = _connection.ExecuteScalar(sql);
+        object id = _queryService.CreateQuiz(value);
         return Created($"/api/quizzes/{id}", null);
     }
+
+   
 
     // PUT api/quizzes/5
     [HttpPut("{id}")]

@@ -8,6 +8,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using QuizService.Services;
 
 namespace QuizService;
 
@@ -25,6 +26,7 @@ public class Startup
     {
         services.AddMvc();
         services.AddSingleton(InitializeDb());
+        services.AddScoped<IQueryService, QueryService>();
         services.AddControllers();
     }
 
@@ -52,7 +54,9 @@ public class Startup
         var migrationResourceNames = assembly.GetManifestResourceNames()
             .Where(x => x.EndsWith(".sql"))
             .OrderBy(x => x);
-        if (!migrationResourceNames.Any()) throw new System.Exception("No migration files found!");
+        if (!migrationResourceNames.Any()) 
+            throw new System.Exception("No migration files found!");
+
         foreach (var resourceName in migrationResourceNames)
         {
             var sql = GetResourceText(assembly, resourceName);
