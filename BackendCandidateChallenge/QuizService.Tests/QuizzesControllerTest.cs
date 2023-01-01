@@ -1,15 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using Dapper;
+using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using QuizService.Model;
 using QuizService.Model.Domain;
@@ -18,12 +24,17 @@ using Xunit;
 
 namespace QuizService.Tests;
 
-public class QuizzesControllerTest
+public class QuizzesControllerTest 
 {
     const string QuizApiEndPoint = "/api/quizzes/";
-    private readonly IQueryService _queryService;
 
- 
+    //private readonly IDbConnection _connection;
+    
+
+    //public QuizzesControllerTest(IDbConnection connection)
+    //{
+    //    _connection = connection;       
+    //}
 
     [Fact]
     public async Task PostNewQuizAddsQuiz()
@@ -97,7 +108,6 @@ public class QuizzesControllerTest
          string QuizApiEndPoint = "/api/quizzes";
 
         //Get the client response after taking the Quiz
-
        
 
         using (var testHost = new TestServer(new WebHostBuilder()
@@ -241,6 +251,24 @@ public class QuizzesControllerTest
         }
 
         return qids;
+    }
+
+    //Creating quiz through SQL Statement
+    [Fact]
+    public void CreateQuizWithSqlQueryTest()
+    {
+        string QuizApiEndPoint = "/api/quizzes";
+        using (var testHost = new TestServer(new WebHostBuilder()
+                  .UseStartup<Startup>()))
+        {
+            var _connection = testHost.Services.GetRequiredService<IDbConnection>();          
+            string createQuizSql = "Insert into Quiz(Title) Values('My Third Quiz')";
+            var id = _connection.ExecuteScalar(createQuizSql);
+            var client = testHost.CreateClient();
+            var response = client.GetAsync(new Uri(testHost.BaseAddress, $"{QuizApiEndPoint}"));
+            var result = JsonConvert.DeserializeObject<List<Quiz>>(response.Result.Content.ReadAsStringAsync().Result);
+            Assert.True(result.Count ==3);
+        }
     }
 
 }
