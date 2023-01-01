@@ -3,7 +3,7 @@
     "QuizService": {
       "commandName": "Project",
       "launchBrowser": true,
-      "launchUrl": "api/values",
+      "launchUrl": "api/quizzes",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },

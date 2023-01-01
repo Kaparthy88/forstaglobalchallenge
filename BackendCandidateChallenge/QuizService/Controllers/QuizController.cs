@@ -4,10 +4,14 @@ using QuizService.Model;
 using QuizService.Services;
 using Microsoft.Extensions.Logging;
 using QuizService.Exceptions;
+using System;
+using System.Threading.Tasks;
+using QuizService.Model.Domain;
 
 namespace QuizService.Controllers;
 
 //TODO : Add Exceptions for Put,Post and Delete 
+//TODO : Implement Async on the put, post and Delete
 [Route("api/quizzes")]
 public class QuizController : Controller
 {
@@ -30,18 +34,24 @@ public class QuizController : Controller
 
     // GET api/quizzes/5
     [HttpGet("{id}")]
-    public object Get(int id)
+    public async Task<object> Get(int id)
     {
         try
         {
-            _logger.LogInformation($"Fetching Quiz for specif Id : {id} ");
-            return _queryService.FetchQuizById(id);
+            _logger.LogInformation($"Fetching Quiz for specific Id : {id} ");
+            return await _queryService.FetchQuizById(id);
         }
         catch (NotFoundException ex )
         {
             _logger.LogError("Getting error while fetching the Quiz by Id ",ex.Message);
             return NotFound();
         }
+        catch (Exception ex)
+        {
+            _logger.LogError("Getting error while fetching the Quiz by Id ", ex.Message);
+            return NotFound();
+        }
+
     }
 
     
@@ -78,14 +88,38 @@ public class QuizController : Controller
         return NoContent();
     }
 
-    
+
+    // POST api/quizzes/5/questions
+    [HttpGet]
+    [Route("{id}/questions")]
+    public async Task<IEnumerable<Question>> GetQuestions(int id)
+    {
+        var questionList =  await _queryService.FetchQuestionByQuizId(id);
+        return questionList;
+    }
+
+
+
     // POST api/quizzes/5/questions
     [HttpPost]
     [Route("{id}/questions")]
     public IActionResult PostQuestion(int id, [FromBody]QuestionCreateModel value)
     {
-        int questionId = _queryService.CreateNewQuestionsForQuiz(id, value);
-        return Created($"/api/quizzes/{id}/questions/{questionId}", null);
+        try
+        {
+            object questionId = _queryService.CreateNewQuestionsForQuiz(id, value);
+            return Created($"/api/quizzes/{id}/questions/{questionId}", null);
+        }
+        catch(NotFoundException ex)
+        {
+            _logger.LogError("Unable to create the question. {0}", ex.Message);
+            return NotFound(); 
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("Unable to create the question.{0}", ex.Message);
+            return BadRequest();
+        }
     }
 
 
@@ -118,7 +152,7 @@ public class QuizController : Controller
     [Route("{id}/questions/{qid}/answers")]
     public IActionResult PostAnswer(int id, int qid, [FromBody]AnswerCreateModel value)
     {
-        int answerId = _queryService.CreateAnswer(qid, value);
+        object answerId = _queryService.CreateAnswer(qid, value);
         return Created($"/api/quizzes/{id}/questions/{qid}/answers/{answerId}", null);
     }
 

@@ -1,21 +1,26 @@
 ﻿using Dapper;
-using Microsoft.AspNetCore.Mvc;
 using QuizService.Model;
 using QuizService.Model.Domain;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Linq;
 using QuizService.Exceptions;
+using System;
+using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
 
 namespace QuizService.Services
 {
+    //TODO :Add try, catch blocks to handle Exceptions.    
     public class QueryService : IQueryService
     {
         private readonly IDbConnection _connection;
+        private readonly ILogger<QueryService> _logger;
 
-        public QueryService(IDbConnection connection) {
+        public QueryService(IDbConnection connection, ILogger<QueryService> logger)
+        {
             _connection = connection;
+            _logger = logger;
         }
 
         /// <summary>
@@ -40,23 +45,46 @@ namespace QuizService.Services
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
-        public object FetchQuizById(int id)
+        public async Task<object> FetchQuizById(int id)
         {
-            const string quizSql = "SELECT * FROM Quiz WHERE Id = @Id;";
-            var quiz = _connection.QuerySingle<Quiz>(quizSql, new { Id = id });
-
-            if (quiz == null)
-                throw new NotFoundException(" Requested Quiz not found");
+            Quiz quiz = VerifyQuizById(id);
 
             //Get Questions Based on QuizId
-            IEnumerable<Question> questions = FetchQuestionByQuizId(id);
+            IEnumerable<Question> questions = await FetchQuestionByQuizId(id);
 
             //Get Answers based on QuizId
-            Dictionary<int, IList<Answer>> answers = FetchAnswersById(id);
+            Dictionary<int, IList<Answer>> answers = await FetchAnswersById(id);
 
             //Creating the response. 
-            return CreateQuizResponseModel(id, quiz, questions, answers);            
-            
+            return  CreateQuizResponseModel(id, quiz, questions, answers);
+
+        }
+
+        /// <summary>
+        /// Verify the quiz based on its ID
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        /// <exception cref="NotFoundException"></exception>
+        public Quiz VerifyQuizById(int id)
+        {
+            try
+            {
+
+                const string quizSql = "SELECT * FROM Quiz WHERE Id = @Id;";
+
+                var quiz = _connection.QuerySingle<Quiz>(quizSql, new { Id = id });   // Throws Exception when there is no value or Multiple values
+
+                if (quiz == null)
+                    throw new NotFoundException(" Requested Quiz not found");
+
+                return quiz;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Exception occurred while verifying the Quiz by given ID. Message: {0} ", ex.Message);
+                throw new NotFoundException(" Requested Quiz not found"); 
+            }
         }
 
         /// <summary>
@@ -64,10 +92,13 @@ namespace QuizService.Services
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
-        private Dictionary<int, IList<Answer>> FetchAnswersById(int id)
+        private Task<Dictionary<int, IList<Answer>>> FetchAnswersById(int id)
         {
+            //Verifying the Quiz Id exists or not.
+            VerifyQuizById(id);
+
             const string answersSql = "SELECT a.Id, a.Text, a.QuestionId FROM Answer a INNER JOIN Question q ON a.QuestionId = q.Id WHERE q.QuizId = @QuizId;";
-            var answers = _connection.Query<Answer>(answersSql, new { QuizId = id })
+            var answers =   _connection.QueryAsync<Answer>(answersSql, new { QuizId = id }).Result
                 .Aggregate(new Dictionary<int, IList<Answer>>(), (dict, answer) =>
                 {
                     if (!dict.ContainsKey(answer.QuestionId))
@@ -75,7 +106,7 @@ namespace QuizService.Services
                     dict[answer.QuestionId].Add(answer);
                     return dict;
                 });
-            return answers;
+            return Task.FromResult(answers);
         }
 
         /// <summary>
@@ -83,11 +114,33 @@ namespace QuizService.Services
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
-        private IEnumerable<Question> FetchQuestionByQuizId(int id)
+        public async Task<IEnumerable<Question>> FetchQuestionByQuizId(int id)
         {
+            //Verifying the Quiz Id exists or not.
+            VerifyQuizById(id);
             const string questionsSql = "SELECT * FROM Question WHERE QuizId = @QuizId;";
-            var questions = _connection.Query<Question>(questionsSql, new { QuizId = id });
+            var questions = await _connection.QueryAsync<Question>(questionsSql, new { QuizId = id });
             return questions;
+        }
+
+
+        /// <summary>
+        /// Get the questions from database on QuestionId
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        private  Question FetchQuestionByQuestionId(int qid)
+        {    try
+            {
+                const string questionsSql = "SELECT * FROM Question WHERE Id = @QId;";
+                var question =  _connection.QueryAsync<Question>(questionsSql, new { QId = qid });
+                return question.Result.FirstOrDefault();
+            }
+            catch (Exception ex) 
+            {
+                _logger.LogError(ex.Message);
+                throw new NotFoundException("Question Id is not present in the database");
+            }
         }
 
         /// <summary>
@@ -98,7 +151,7 @@ namespace QuizService.Services
         /// <param name="questions"></param>
         /// <param name="answers"></param>
         /// <returns></returns>
-        private QuizResponseModel CreateQuizResponseModel(int id, Quiz quiz, IEnumerable<Question> questions, Dictionary<int, IList<Answer>> answers)
+        public QuizResponseModel CreateQuizResponseModel(int id, Quiz quiz, IEnumerable<Question> questions, Dictionary<int, IList<Answer>> answers)
         {
             return new QuizResponseModel
             {
@@ -131,7 +184,7 @@ namespace QuizService.Services
         /// <param name="value"></param>
         /// <returns></returns>
         public object CreateQuiz(QuizCreateModel value)
-        {
+        {            
             var sql = $"INSERT INTO Quiz (Title) VALUES('{value.Title}'); SELECT LAST_INSERT_ROWID();";
             var id = _connection.ExecuteScalar(sql);
             return id;
@@ -157,6 +210,7 @@ namespace QuizService.Services
         /// <returns></returns>
         public int DeleteQuiz(int id)
         {
+            VerifyQuizById(id);
             const string sql = "DELETE FROM Quiz WHERE Id = @Id";
             int rowsDeleted = _connection.Execute(sql, new { Id = id });
             return rowsDeleted;
@@ -168,10 +222,11 @@ namespace QuizService.Services
         /// <param name="id"></param>
         /// <param name="value"></param>
         /// <returns></returns>
-        public int CreateNewQuestionsForQuiz(int id, QuestionCreateModel value)
+        public object CreateNewQuestionsForQuiz(int id, QuestionCreateModel value)
         {
+            VerifyQuizById(id);
             const string sql = "INSERT INTO Question (Text, QuizId) VALUES(@Text, @QuizId); SELECT LAST_INSERT_ROWID();";
-            var questionId  = (int) _connection.ExecuteScalar(sql, new { Text = value.Text, QuizId = id });
+            var questionId  =  _connection.ExecuteScalar(sql, new { Text = value.Text, QuizId = id });
             return questionId;
         }
 
@@ -183,8 +238,25 @@ namespace QuizService.Services
         /// <returns></returns>
         public int UpdateQuestion(int qid, QuestionUpdateModel value)
         {
-            const string sql = "UPDATE Question SET Text = @Text, CorrectAnswerId = @CorrectAnswerId WHERE Id = @QuestionId";
-            int rowsUpdated = _connection.Execute(sql, new { QuestionId = qid, Text = value.Text, CorrectAnswerId = value.CorrectAnswerId });
+            FetchQuestionByQuestionId(qid);
+
+            string sql;
+            int rowsUpdated = 0;
+
+            if (value == null)
+            {
+                return rowsUpdated;
+            }
+
+            if(value.Text== null) 
+            {                
+                 sql = "UPDATE Question SET  CorrectAnswerId = @CorrectAnswerId WHERE Id = @QuestionId";
+                 rowsUpdated = _connection.Execute(sql, new { QuestionId = qid,  CorrectAnswerId = value.CorrectAnswerId });
+                return rowsUpdated;
+            }
+
+               sql = "UPDATE Question SET Text = @Text, CorrectAnswerId = @CorrectAnswerId WHERE Id = @QuestionId";
+               rowsUpdated = _connection.Execute(sql, new { QuestionId = qid, Text = value.Text, CorrectAnswerId = value.CorrectAnswerId });
             return rowsUpdated;
         }
 
@@ -193,7 +265,7 @@ namespace QuizService.Services
         /// </summary>
         /// <param name="qid"></param>
         public void DeleteQuestionById(int qid)
-        {
+        {          
             const string sql = "DELETE FROM Question WHERE Id = @QuestionId";
             _connection.ExecuteScalar(sql, new { QuestionId = qid });
         }
@@ -204,10 +276,10 @@ namespace QuizService.Services
         /// <param name="qid"></param>
         /// <param name="value"></param>
         /// <returns></returns>
-        public int CreateAnswer(int qid, AnswerCreateModel value)
+        public object CreateAnswer(int qid, AnswerCreateModel value)
         {
             const string sql = "INSERT INTO Answer (Text, QuestionId) VALUES(@Text, @QuestionId); SELECT LAST_INSERT_ROWID();";
-            var answerId = (int)_connection.ExecuteScalar(sql, new { Text = value.Text, QuestionId = qid });
+            var answerId = _connection.ExecuteScalar(sql, new { Text = value.Text, QuestionId = qid });
             return answerId;
         }
 
