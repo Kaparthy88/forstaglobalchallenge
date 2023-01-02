@@ -14,7 +14,7 @@ public class QuizServiceApiPact : IDisposable
 
     public QuizServiceApiPact()
     {
-        PactBuilder = new PactBuilder(new PactConfig { SpecificationVersion = "2.0.0", PactDir = @"..\pacts" });
+        PactBuilder = new PactBuilder(new PactConfig { SpecificationVersion = "2.0.0", PactDir = @"c:\temp\pacts" });
 
         PactBuilder
             .ServiceConsumer("QuizClient")

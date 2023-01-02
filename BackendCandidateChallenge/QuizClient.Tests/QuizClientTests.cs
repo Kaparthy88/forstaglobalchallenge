@@ -187,25 +187,26 @@ public class QuizClientTests : IClassFixture<QuizServiceApiPact>
         _mockProviderService
             .Given("There are some quizzes")
             .UponReceiving("A PUT request to update a quiz question with id = 1")
-            .With(new ProviderServiceRequest
-            {
-                Method = HttpVerb.Put,
-                Path = "/api/quizzes/123/questions/1",
-                Headers = new Dictionary<string, object>
+             .With(new ProviderServiceRequest
+             {
+               Method = HttpVerb.Post,
+               Path = "/api/quizzes/123/questions",
+               Headers = new Dictionary<string, object>
                 {
                     { "Content-Type", "application/json" }
                 }
             })
             .WillRespondWith(new ProviderServiceResponse
             {
-                Status = 204,
+                Status = 201,
                 Headers = new Dictionary<string, object>
                 {
-                    { "Content-Type", "application/json; charset=utf-8" }
+                    { "Content-Type", "application/json" },
+                    { "Location", PactNet.Matchers.Match.Regex("/api/quizzes/123/questions/1", "quizzes\\/123\\/questions\\/[0-9]*") }
                 }
-            });
+             });
 
-        var consumer = new QuizClient(_mockProviderServiceBaseUri, Client);
+         var consumer = new QuizClient(_mockProviderServiceBaseUri, Client);
 
         var result = await consumer.PutQuestionAsync(123, 1, new QuizQuestion { Text = "Updated text" }, CancellationToken.None);
         Assert.True(string.IsNullOrEmpty(result.ErrorMessage), result.ErrorMessage);
@@ -287,5 +288,49 @@ public class QuizClientTests : IClassFixture<QuizServiceApiPact>
         Assert.NotNull(result.Value);
 
         _mockProviderService.VerifyInteractions();
+    }
+
+    [Fact]
+    public async Task GivenQuizExistsPostWithTwoQuestions()
+    {
+        _mockProviderService
+          .Given("There are some quizzes")
+          .UponReceiving("A post two questions for quiz 123 collection")
+          .With(new ProviderServiceRequest
+          {
+              Method = HttpVerb.Post,
+              Path = "/api/quizzes/123/questions",
+              Headers = new Dictionary<string, object>
+                {
+                    { "Content-Type", "application/json" }
+                }
+          })
+            .WillRespondWith(new ProviderServiceResponse
+            {
+                Status = 201,
+                Headers = new Dictionary<string, object>
+                {
+                    { "Content-Type", "application/json" },
+                    { "Location", PactNet.Matchers.Match.Regex("/api/quizzes/123/questions/1", "quizzes\\/123\\/questions\\/[0-9]*") }
+                }
+           });
+
+        var consumer = new QuizClient(_mockProviderServiceBaseUri, Client);
+
+        List<QuizQuestion> quizQuestions = new List<QuizQuestion>
+            { 
+            new QuizQuestion { Text = "This is a first question" },
+            new QuizQuestion { Text = "This is a second question" } };
+
+        var result = await consumer.PostQuestionsAsync(123, quizQuestions, CancellationToken.None);        
+        
+        
+        Assert.True(string.IsNullOrEmpty(result.ErrorMessage), result.ErrorMessage);
+        Assert.Equal(HttpStatusCode.Created, result.StatusCode);
+        Assert.NotNull(result.Value);
+
+
+        _mockProviderService.VerifyInteractions();
+       
     }
 }

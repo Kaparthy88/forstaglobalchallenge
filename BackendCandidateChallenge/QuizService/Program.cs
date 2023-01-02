@@ -12,7 +12,9 @@ public class Program
     {
         Log.Logger = new LoggerConfiguration()
             .Enrich.FromLogContext()
-            .WriteTo.Console()
+            .MinimumLevel.Information()
+           // .WriteTo.Console() 
+            .WriteTo.File(@"c:\temp\log.txt", rollingInterval: RollingInterval.Day)
             .CreateLogger();
 
         try

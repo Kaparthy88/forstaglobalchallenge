@@ -83,6 +83,26 @@ public class QuizClient
             new Response<Uri>(response.StatusCode, null, await ReadErrorAsync(response));
     }
 
+
+    public async Task<Response<Uri>> PostQuestionsAsync(int quizId, List<QuizQuestion> questions, CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response = new HttpResponseMessage(HttpStatusCode.BadRequest) ;
+       
+        foreach (var question in questions)
+        {
+            var request =
+                new HttpRequestMessage(HttpMethod.Post, new Uri(_quizServiceUri, $"/api/quizzes/{quizId}/questions"))
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(question))
+                };
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+             response = await _httpClient.SendAsync(request, cancellationToken);
+        }
+        return response.StatusCode == HttpStatusCode.Created ?
+            new Response<Uri>(response.StatusCode, response.Headers.Location) :
+            new Response<Uri>(response.StatusCode, null, await ReadErrorAsync(response));
+    }
+
     public async Task<Response<object>> PutQuestionAsync(int quizId, int questionId, QuizQuestion question, CancellationToken cancellationToken)
     {
         var request =
