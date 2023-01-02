@@ -187,26 +187,25 @@ public class QuizClientTests : IClassFixture<QuizServiceApiPact>
         _mockProviderService
             .Given("There are some quizzes")
             .UponReceiving("A PUT request to update a quiz question with id = 1")
-             .With(new ProviderServiceRequest
-             {
-               Method = HttpVerb.Post,
-               Path = "/api/quizzes/123/questions",
-               Headers = new Dictionary<string, object>
+            .With(new ProviderServiceRequest
+            {
+                Method = HttpVerb.Put,
+                Path = "/api/quizzes/123/questions/1",
+                Headers = new Dictionary<string, object>
                 {
                     { "Content-Type", "application/json" }
                 }
             })
             .WillRespondWith(new ProviderServiceResponse
             {
-                Status = 201,
+                Status = 204,
                 Headers = new Dictionary<string, object>
                 {
-                    { "Content-Type", "application/json" },
-                    { "Location", PactNet.Matchers.Match.Regex("/api/quizzes/123/questions/1", "quizzes\\/123\\/questions\\/[0-9]*") }
+                    { "Content-Type", "application/json; charset=utf-8" }
                 }
-             });
+            });
 
-         var consumer = new QuizClient(_mockProviderServiceBaseUri, Client);
+        var consumer = new QuizClient(_mockProviderServiceBaseUri, Client);
 
         var result = await consumer.PutQuestionAsync(123, 1, new QuizQuestion { Text = "Updated text" }, CancellationToken.None);
         Assert.True(string.IsNullOrEmpty(result.ErrorMessage), result.ErrorMessage);
